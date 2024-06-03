@@ -1,0 +1,87 @@
+name: "_Reusable PractRand"
+
+on:
+  workflow_call:
+    inputs:
+      battery_name:
+        description: 'Predefined batteries of statistical tests'
+        required: true
+        type: string
+      generator_name:
+        description: 'Pseudo Random Number Generator'
+        required: true
+        type: string
+      test_num:
+        description: 'Test number'
+        required: true
+        type: string
+      test_dir:
+        description: 'Directory name'
+        required: true
+        type: string
+
+env:
+  LOG_FILE: "full.log"
+  LOG_STAT: "stat.log"
+
+jobs:
+  main:
+    name: Test the PRNG
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Run PractRand ${{inputs.battery_name}} MAX with ${{inputs.generator_name}}
+      run: |
+        sudo apt install g++-12
+        git clone https://github.com/planet36/PractRand.git # Fork of PractRand-pre0.95 with many warnings fixed
+        cd PractRand
+        CXX=g++-12 CXXFLAGS="-std=c++2a -O3" ./configure
+        make
+        ./RNG_test ${{inputs.generator_name}} -tlmax ${{inputs.battery_name}} -seed 0xf6b75ab2bc471c7 | tee ${{env.LOG_FILE}}
+
+        #git clone https://github.com/tylov-fork/PractRand.git # with GNUmakefile to build/Linux/
+        #cd PractRand
+        #make
+        #build/Linux/bin/RNG_test ${{inputs.generator_name}} -tlmax 1G  >> $GITHUB_STEP_SUMMARY
+
+        #git clone https://github.com/MartyMacGyver/PractRand.git
+        #cd PractRand
+        #g++ -c src/*.cpp src/RNGs/*.cpp src/RNGs/other/*.cpp -O3 -Iinclude -pthread -std=gnu++11
+        #ar rcs libPractRand.a *.o
+        #g++ -o RNG_test tools/RNG_test.cpp libPractRand.a -O3 -Iinclude -pthread -std=gnu++11
+        #g++ -o RNG_benchmark tools/RNG_benchmark.cpp libPractRand.a -O3 -Iinclude -pthread -std=gnu++11
+        #g++ -o RNG_output tools/RNG_output.cpp libPractRand.a -O3 -Iinclude -pthread -std=gnu++11
+        #echo '```' >> $GITHUB_STEP_SUMMARY
+        #./RNG_test ${{inputs.generator_name}} -tlmax 1G  >> $GITHUB_STEP_SUMMARY
+        #echo '```' >> $GITHUB_STEP_SUMMARY
+
+        echo "action_state=yellow" >> "$GITHUB_ENV"
+        printf '%s\n' "$action_state" # This will output 'yellow'
+
+    - name: Upload results to Job artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: 'Full log file archive'
+        path: './PractRand/${{env.LOG_FILE}}'
+
+    - name: Show error status
+      run: |
+        LOGFILE="found.log"
+        cat ./PractRand/${{env.LOG_FILE}} | grep "unusual" > $LOGFILE || true 
+        ERRORS=$(cat $LOGFILE | wc -l)
+        if [ -s ${LOGFILE} ]; then echo "__Status__: Fail ❌ ( ${ERRORS} )" >> $GITHUB_STEP_SUMMARY; else echo "__Status__: Pass ✅" >> $GITHUB_STEP_SUMMARY; fi
+
+    - name: Show Stats and Analysis Report
+      working-directory: ./PractRand
+      run: |
+        echo "**System** :" >> $GITHUB_STEP_SUMMARY
+        uname -a >> $GITHUB_STEP_SUMMARY
+        #echo "**Run time**, seconds :" >> $GITHUB_STEP_SUMMARY
+        #cat ${{env.LOG_STAT}} >> $GITHUB_STEP_SUMMARY
+        echo "**Full log** :" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        cat ${{env.LOG_FILE}} >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY

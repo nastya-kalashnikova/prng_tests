@@ -1,0 +1,45 @@
+name: "TestU01"
+run-name: "TestU01 ${{inputs.battery_name}} with ${{inputs.generator_name}}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      battery_name:
+        description: >
+          Predefined batteries of statistical tests
+        required: true
+        default: 'SmallCrush'
+        type: choice
+        options: ['SmallCrush', 'Crush', 'BigCrush', 'FIPS_140_2', 'pseudoDIEHARD']
+      generator_name:
+        description: >
+          Pseudo Random Number Generator
+        required: true
+        default: 'ChaCha20'
+        type: choice
+        options: ['ChaCha20', 'GaloisLeftLFSR', 'GaloisRightLFSR']
+
+env:
+  TEST_NUM: "10"
+  DIR_NAME: "AKalashnikova"
+
+jobs:
+  prepare:
+    name: Set parameters
+    runs-on: ubuntu-latest
+    outputs:
+      test_num: ${{ env.TEST_NUM }}
+      test_dir: ${{ env.DIR_NAME }}
+    steps:
+    - name: Echo ENV parameters
+      run: echo ${{ github.events.inputs.environment }}
+
+  main:
+    name: Run test with the parameters
+    uses: ./.github/workflows/reusable_TestU01.yml
+    needs: prepare
+    with:
+      test_num: ${{needs.prepare.outputs.test_num}}
+      test_dir: ${{needs.prepare.outputs.test_dir}}
+      battery_name: ${{inputs.battery_name}}
+      generator_name: ${{inputs.generator_name}}

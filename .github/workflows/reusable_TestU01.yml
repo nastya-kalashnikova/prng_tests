@@ -1,0 +1,86 @@
+name: "_Reusable TestU01"
+
+on:
+  workflow_call:
+    inputs:
+      battery_name:
+        description: 'Predefined batteries of statistical tests'
+        required: true
+        type: string
+      generator_name:
+        description: 'Pseudo Random Number Generator'
+        required: true
+        type: string
+      test_num:
+        description: 'Test number'
+        required: true
+        type: string
+      test_dir:
+        description: 'Directory name'
+        required: true
+        type: string
+
+env:
+  LOG_FILE: "stat.log"
+
+jobs:
+  main:
+    name: Test the PRNG
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./TestU01
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Run TestU01 ${{inputs.battery_name}} with ${{inputs.generator_name}}
+      run: |
+        sudo apt install testu01-bin testu01-data libtestu01-0-dev
+        #sed -i '/PROGRAMS = ${{inputs.generator_name}}/s/^/#/g' Makefile    # to comment out
+        sed -i '/PROGRAMS = AKalashnikova${{inputs.generator_name}}/s/^#//g' Makefile     # to uncomment
+        sed -i 's/bbattery_%%BATT_NAME%%/bbattery_${{inputs.battery_name}}/' AKalashnikova${{inputs.generator_name}}.c
+        #make  >> $GITHUB_STEP_SUMMARY || true
+        /usr/bin/time -o ${{env.LOG_FILE}} -p make || true
+
+        echo "action_state=yellow" >> "$GITHUB_ENV"
+        printf '%s\n' "$action_state" # This will output 'yellow'
+
+    - name: Upload results to Job artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: 'Full log file AKalashnikova${{inputs.generator_name}}.res archive'
+        path: './TestU01/AKalashnikova${{inputs.generator_name}}.res'
+
+    - name: Show error status
+      run: |
+        if [ ${{inputs.battery_name}} = "SmallCrush" ] || [ ${{inputs.battery_name}} = "Crush" ] || [ ${{inputs.battery_name}} = "BigCrush" ]; then
+          LOGFILE="found.log"
+          cat ./AKalashnikova${{inputs.generator_name}}.res | grep "All tests were passed" > $LOGFILE || true
+          if [ -s ${LOGFILE} ]; then echo "__Status__: Pass ✅" >> $GITHUB_STEP_SUMMARY; else echo "__Status__: Fail ❌ " >> $GITHUB_STEP_SUMMARY; fi
+
+          if [ ${{inputs.generator_name}} = 'ChaCha20' ]; then
+            cat ./AKalashnikova${{inputs.generator_name}}.res | grep -E "9 tests, 237 assertions|Finished in|Selftest with RFC 7539 test vectors" > $LOGFILE || true
+            echo "*******************"
+            cat $LOGFILE
+            echo "*******************"
+            #  9 tests, 237 assertions, 0 failures
+            #  Finished in 0.00003256 seconds (real) 0.00003197 seconds (proc)
+            #  Selftest with RFC 7539 test vectors: PASSED.
+            SELF_RESULT=$(cat ${LOGFILE} | grep PASSED || true)
+            if [ -n "${SELF_RESULT}" ]; then echo "__Selftest status__: Pass ✅" >> $GITHUB_STEP_SUMMARY; else echo "__Selftest status__: Fail ❌ " >> $GITHUB_STEP_SUMMARY; fi
+          fi
+        fi
+        pwd
+
+    - name: Show Stats and Analysis Report
+      run: |
+        echo "**System** :" >> $GITHUB_STEP_SUMMARY
+        uname -a >> $GITHUB_STEP_SUMMARY
+        echo "**Run time**, seconds :" >> $GITHUB_STEP_SUMMARY
+        cat ${{env.LOG_FILE}} >> $GITHUB_STEP_SUMMARY
+        echo "**Full log** :" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        cat ./AKalashnikova${{inputs.generator_name}}.res >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
