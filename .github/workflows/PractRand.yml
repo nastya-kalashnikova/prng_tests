@@ -1,23 +1,25 @@
 name: "PractRand"
-run-name: "PractRand ${{inputs.battery_name}} MAX with ${{inputs.generator_name}}"
+run-name: "PractRand ${{inputs.battery_name}} with ${{inputs.generator_name}}"
 
 on:
   workflow_dispatch:
     inputs:
       battery_name:
         description: >
-          Predefined batteries of statistical tests
+          Predefined batteries of statistical tests.
+          NOTE: 'NonStop' means 'run until you Cancel the job manually'.
+            It also sets 'p-value' to '0.001' !
         required: true
         default: '1G'
         type: choice
-        options: ['1G', '10G', '100G', '1T', '10T', '100T']
+        options: ['NonStop', '1G', '10G', '100G', '1T', '10T', '100T']
       generator_name:
         description: >
           Pseudo Random Number Generator
         required: true
-        default: 'chacha'
+        default: 'AKalashnikovaChaCha20'
         type: choice
-        options: ['arbee', 'chacha', 'efiix', 'hc256', 'isaac', 'jsf', 'mt19937', 'rarns', 'salsa', 'sfc', 'sha2_based_pool', 'trivium', 'xsm' ]
+        options: ['AKalashnikovaChaCha20', 'chacha', 'arbee', 'efiix', 'hc256', 'isaac', 'jsf', 'mt19937', 'rarns', 'salsa', 'sfc', 'sha2_based_pool', 'trivium', 'xsm' ]
 
 env:
   TEST_NUM: "10"
@@ -32,7 +34,8 @@ jobs:
       test_dir: ${{ env.DIR_NAME }}
     steps:
     - name: Echo ENV parameters
-      run: echo ${{ github.events.inputs.environment }}
+      run: | 
+        echo ${{ github.events.inputs.environment }}
 
   main:
     name: Run test with the parameters

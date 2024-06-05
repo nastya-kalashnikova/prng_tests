@@ -33,14 +33,13 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Run PractRand ${{inputs.battery_name}} MAX with ${{inputs.generator_name}}
+    - name: Run PractRand ${{inputs.battery_name}} with ${{inputs.generator_name}}
       run: |
         sudo apt install g++-12
         git clone https://github.com/planet36/PractRand.git # Fork of PractRand-pre0.95 with many warnings fixed
         cd PractRand
         CXX=g++-12 CXXFLAGS="-std=c++2a -O3" ./configure
         make
-        ./RNG_test ${{inputs.generator_name}} -tlmax ${{inputs.battery_name}} -seed 0xf6b75ab2bc471c7 | tee ${{env.LOG_FILE}}
 
         #git clone https://github.com/tylov-fork/PractRand.git # with GNUmakefile to build/Linux/
         #cd PractRand
@@ -58,23 +57,44 @@ jobs:
         #./RNG_test ${{inputs.generator_name}} -tlmax 1G  >> $GITHUB_STEP_SUMMARY
         #echo '```' >> $GITHUB_STEP_SUMMARY
 
-        echo "action_state=yellow" >> "$GITHUB_ENV"
-        printf '%s\n' "$action_state" # This will output 'yellow'
+        #echo "action_state=yellow" >> "$GITHUB_ENV"
+        #printf '%s\n' "$action_state" # This will output 'yellow'
+
+        if [ ${{inputs.generator_name}} = 'AKalashnikovaChaCha20' ]; then
+          gcc -O3 -Wall -I.. ../AKalashnikovaChaCha20.c -o ./AKalashnikovaChaCha20 
+          if [ ${{inputs.battery_name}} = 'NonStop' ]; then
+            ./AKalashnikovaChaCha20 | ./RNG_test stdin -tlfail -p 0.001 | tee ${{env.LOG_FILE}}
+          else
+            ./AKalashnikovaChaCha20 | ./RNG_test stdin -tlmax ${{inputs.battery_name}} | tee ${{env.LOG_FILE}}
+          fi
+        else
+          if [ ${{inputs.battery_name}} = 'NonStop' ]; then
+            ./RNG_test ${{inputs.generator_name}} -tlfail -p 0.001 -seed 0xf6b75ab2bc471c7 | tee ${{env.LOG_FILE}}
+          else
+            ./RNG_test ${{inputs.generator_name}} -tlmax ${{inputs.battery_name}} -seed 0xf6b75ab2bc471c7 | tee ${{env.LOG_FILE}}
+          fi
+        fi
 
     - name: Upload results to Job artifact
+      if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
         name: 'Full log file archive'
         path: './PractRand/${{env.LOG_FILE}}'
 
     - name: Show error status
+      if: ${{ always() }}
       run: |
         LOGFILE="found.log"
-        cat ./PractRand/${{env.LOG_FILE}} | grep "unusual" > $LOGFILE || true 
+        cat ./PractRand/${{env.LOG_FILE}} | grep "FAIL" > $LOGFILE || true 
         ERRORS=$(cat $LOGFILE | wc -l)
         if [ -s ${LOGFILE} ]; then echo "__Status__: Fail ❌ ( ${ERRORS} )" >> $GITHUB_STEP_SUMMARY; else echo "__Status__: Pass ✅" >> $GITHUB_STEP_SUMMARY; fi
+        if [ ${{inputs.generator_name}} = 'AKalashnikovaChaCha20' ]; then
+            if [ -s ./PractRand/${{env.LOG_FILE}} ]; then echo "__Selftest status__: Pass ✅" >> $GITHUB_STEP_SUMMARY; else echo "__Selftest status__: Fail ❌ " >> $GITHUB_STEP_SUMMARY; fi
+        fi
 
     - name: Show Stats and Analysis Report
+      if: ${{ always() }}
       working-directory: ./PractRand
       run: |
         echo "**System** :" >> $GITHUB_STEP_SUMMARY

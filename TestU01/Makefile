@@ -22,7 +22,7 @@
 
 SHELL = /bin/bash
 #CC = gcc-12 # Flag for implicit rules
-#CFLAGS = -Wall -O3 -g0 
+CFLAGS = -Wall -O3 -I..
 
 default: all
 
